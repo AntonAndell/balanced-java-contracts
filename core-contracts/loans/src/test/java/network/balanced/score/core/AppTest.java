@@ -69,6 +69,19 @@ class ReferenceLoan {
 
         totalCollateral = totalCollateral.add(totalCollateralChange);
         totalLoan = totalLoan.add(totalLoanChange);
+        
+    }
+
+    public void repayLoan(Address address, BigInteger repaidAmount) {
+          User loanTaker = users.get(address);
+          loanTaker.loan = loanTaker.loan.subtract(repaidAmount);
+          totalLoan = totalLoan.subtract(repaidAmount);
+    }
+
+    public void withdraw(Address address, BigInteger collateral) {
+        User loanTaker = users.get(address);
+        loanTaker.collateral = loanTaker.collateral.subtract(collateral);
+        totalCollateral = totalCollateral.subtract(collateral);
     }
 
     public void lowerPrice(BigInteger loanToAdd) {
@@ -159,6 +172,16 @@ class LoansTests extends TestBase {
         referenceLoan.raisePrice(collateralToSell.multiply(BigInteger.TEN.pow(18)));
     }
 
+    private void repayLoan(Account account, BigInteger repaidAmount) {
+        loans.invoke(account, "repayLoan", repaidAmount.multiply(BigInteger.TEN.pow(18)));
+        referenceLoan.repayLoan(account.getAddress(), repaidAmount.multiply(BigInteger.TEN.pow(18)));
+    }
+
+    private void withdraw(Account account, BigInteger collateralToWithdraw) {
+        loans.invoke(account, "withdraw", collateralToWithdraw.multiply(BigInteger.TEN.pow(18)));
+        referenceLoan.withdraw(account.getAddress(), collateralToWithdraw.multiply(BigInteger.TEN.pow(18)));
+    }
+
     public byte[] tokenData(String method, Map<String, Object> params) {
         Map<String, Object> map = new HashMap<>();
         map.put("method", method);
@@ -218,10 +241,12 @@ class LoansTests extends TestBase {
         Map<String, BigInteger> ratio = (Map<String, BigInteger>)loans.call("get");
         System.out.println("ratio:" + ratio.get("RebalanceCollateral").divide(ratio.get("Loan")).toString());
         takeLoan(account2, 2000, 400);
+        lowerPrice(BigInteger.valueOf(100));
         raisePrice(BigInteger.valueOf(120));
         takeLoan(account3, 1000, 100);
         raisePrice(BigInteger.valueOf(30));
         takeLoan(account4, 4030, 250);
+        
         takeLoan(account5, 2300, 111);
         lowerPrice(BigInteger.valueOf(100));
         takeLoan(account6, 400, 40);
@@ -233,21 +258,20 @@ class LoansTests extends TestBase {
     void comparePositions() {
         Map<String, BigInteger> ratio = (Map<String, BigInteger>)loans.call("get");
         System.out.println("ratio:" + ratio.get("RebalanceCollateral").multiply(BigInteger.TEN.pow(3)).divide(ratio.get("Loan")).toString());
-        System.out.println(ratio);
+        System.out.println(" Collateral: " + ratio.get("RebalanceCollateral").divide(BigInteger.TEN.pow(18)).toString() + " Loan: " + ratio.get("Loan").divide(BigInteger.TEN.pow(18)).toString());
         System.out.println(referenceLoan.totalLoan.toString());
         for (Account account : accounts) {
             Map<String, BigInteger> position = (Map<String, BigInteger>)loans.call("getPosition", account.getAddress());
             Map<String, BigInteger> referencePosition = referenceLoan.getPosition(account.getAddress());
-
-            if (!position.get("Collateral").equals(referencePosition.get("Collateral"))){
-                System.out.println ("collateral");
-                System.out.println (position.get("Collateral").toString() + " == " + (referencePosition.get("Collateral")).toString());
+            if (!position.get("Loan").equals(BigInteger.ZERO)) {
+                if (!position.get("Collateral").divide(position.get("Loan")).equals(referencePosition.get("Collateral").divide(referencePosition.get("Loan")))){
+                    System.out.println ("collateral");
+                    System.out.println (position.get("Collateral").toString() + " == " + referencePosition.get("Collateral").toString());
+                    System.out.println ("loans");
+                    System.out.println (position.get("Loan").toString() + " == " + referencePosition.get("Loan").toString());
+                }
             }
             
-            if (!position.get("Loan").equals(referencePosition.get("Loan"))) {
-                System.out.println ("loans");
-                System.out.println (position.get("Loan").toString() + " == " + (referencePosition.get("Loan")).toString());
-            }
            
         }
     }

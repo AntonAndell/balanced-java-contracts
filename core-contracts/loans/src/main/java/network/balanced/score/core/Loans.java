@@ -107,7 +107,6 @@ public class Loans {
         );
     }
 
-
     @External(readonly = true)
     public Map<String, BigInteger> getPosition(Address address) {
         LoanTaker user  = loanTakers.getOrDefault(address, new LoanTaker());
@@ -136,27 +135,36 @@ public class Loans {
         rebalaceLoan.set(rebalaceLoan.get().add(amount));
     }
 
-    // @External
-    // public void withdraw(BigInteger collateral, BigInteger repaidAmount) {
-    //     LoanTaker user  = loanTakers.get(Context.getCaller());
-    //     Biginteger collateralInPool = getUserCollateral(user);
-    //     BigInteger loan = getUserLoan(user);   //ignore lockedLoan
-        
-    //     Context.require(repaidAmount <= loan);
-    //     Context.require(collateralInPool.add(user.collateral) >= collateral);
-        
-    //     BigInteger repaidRebalanceTokens = repaidAmount.multiply(user.rebalancingTokens).divide(loan);
-    //     BigInteger removedRebalanceCollateral = repaidAmount.multiply(collateralInPool).divide(loan);
+    @External
+    public void withdraw(BigInteger collateral) {
+        LoanTaker user  = loanTakers.get(Context.getCaller());
+        //Context.require(user.collaterar.compareTo(collateral));
+        //TODO: also require governance LTV value
 
-    //     totalRebalanceShares.set(totalRebalanceShares.get().subtract(repaidRebalanceTokens));
-    //     rebalanceCollateral.set(rebalanceCollateral.get().subtract(removedRebalanceCollateral));
-    //     rebalaceLoan.set(rebalaceLoan.get().subtract(repaidAmount));
-    //     collateral = collateral.subtract(removedRebalanceCollateral);
+        user.collateral = user.collateral.subtract(collateral);
+        BigInteger collateralInPool = getUserCollateral(user);
+        loanTakers.set(Context.getCaller(), user);
+    }
 
-    //     if (collateral.compareTo(BigInteger.ZERO)) {
-    //         user.collateral = user.collateral.subtract(collateral);
-    //     }
-    // }
+    @External
+    public void repayLoan(BigInteger repaidAmount) {
+        LoanTaker user  = loanTakers.get(Context.getCaller());
+
+        //ignoring locked loan
+        BigInteger loan = getUserLoan(user);
+        //Context.require(loan.compareTo(repaidAmount));
+        BigInteger collateral = getUserCollateral(user);
+
+        BigInteger removedTokens = repaidAmount.multiply(totalRebalanceShares.get()).divide(rebalaceLoan.get());
+        BigInteger removedpoolCollateral =  removedTokens.multiply(rebalanceCollateral.get()).divide(totalRebalanceShares.get());
+        user.collateral = user.collateral.add(removedpoolCollateral);
+        user.rebalanceTokens = user.rebalanceTokens.subtract(removedTokens);
+
+        rebalanceCollateral.set(rebalanceCollateral.get().subtract(removedpoolCollateral));
+        totalRebalanceShares.set(totalRebalanceShares.get().subtract(removedTokens));
+        rebalaceLoan.set(rebalaceLoan.get().subtract(repaidAmount));
+        loanTakers.set(Context.getCaller(), user);
+    }
 
     private void depositAndBorrow(Address _from, BigInteger collateral, BigInteger loanSize) {
         LoanTaker user  = loanTakers.getOrDefault(_from, new LoanTaker());
@@ -199,6 +207,8 @@ public class Loans {
         BigInteger rebalanceTokens = loanSize;
         if (!totalRebalanceShares.get().equals(BigInteger.ZERO)) {
             rebalanceTokens = totalRebalanceShares.get().multiply(loanSize).divide(rebalaceLoan.get());
+        } else {
+            rebalanceTokens = BigInteger.TEN.pow(36);
         }
 
         totalRebalanceShares.set(totalRebalanceShares.get().add(rebalanceTokens));
