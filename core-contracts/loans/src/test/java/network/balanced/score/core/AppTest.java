@@ -21,6 +21,8 @@ import score.Context;
 import score.Address;
 
 import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -242,14 +244,17 @@ class LoansTests extends TestBase {
         System.out.println("ratio:" + ratio.get("RebalanceCollateral").divide(ratio.get("Loan")).toString());
         takeLoan(account2, 2000, 400);
         lowerPrice(BigInteger.valueOf(100));
-        raisePrice(BigInteger.valueOf(120));
+        //raisePrice(BigInteger.valueOf(120));
         takeLoan(account3, 1000, 100);
         raisePrice(BigInteger.valueOf(30));
         takeLoan(account4, 4030, 250);
         
-        takeLoan(account5, 2300, 111);
-        lowerPrice(BigInteger.valueOf(100));
+        takeLoan(account5, 2300, 110);
+        lowerPrice(BigInteger.valueOf(60));
         takeLoan(account6, 400, 40);
+        lowerPrice(BigInteger.valueOf(60));
+        lowerPrice(BigInteger.valueOf(60));
+
         takeLoan(account7, 7000, 1800);
 
     }
@@ -257,14 +262,16 @@ class LoansTests extends TestBase {
     @AfterEach
     void comparePositions() {
         Map<String, BigInteger> ratio = (Map<String, BigInteger>)loans.call("get");
-        System.out.println("ratio:" + ratio.get("RebalanceCollateral").multiply(BigInteger.TEN.pow(3)).divide(ratio.get("Loan")).toString());
+        BigDecimal collateral = new BigDecimal(ratio.get("RebalanceCollateral"));
+        BigDecimal loan = new BigDecimal(ratio.get("Loan"));
+        System.out.println("ratio:" + collateral.divide(loan, MathContext.DECIMAL128).toString());
         System.out.println(" Collateral: " + ratio.get("RebalanceCollateral").divide(BigInteger.TEN.pow(18)).toString() + " Loan: " + ratio.get("Loan").divide(BigInteger.TEN.pow(18)).toString());
         System.out.println(referenceLoan.totalLoan.toString());
         for (Account account : accounts) {
             Map<String, BigInteger> position = (Map<String, BigInteger>)loans.call("getPosition", account.getAddress());
             Map<String, BigInteger> referencePosition = referenceLoan.getPosition(account.getAddress());
             if (!position.get("Loan").equals(BigInteger.ZERO)) {
-                if (!position.get("Collateral").divide(position.get("Loan")).equals(referencePosition.get("Collateral").divide(referencePosition.get("Loan")))){
+                if (position.get("Collateral").divide(position.get("Loan")).equals(referencePosition.get("Collateral").divide(referencePosition.get("Loan")))){
                     System.out.println ("collateral");
                     System.out.println (position.get("Collateral").toString() + " == " + referencePosition.get("Collateral").toString());
                     System.out.println ("loans");
