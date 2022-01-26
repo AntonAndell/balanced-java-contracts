@@ -14,8 +14,8 @@ dependencies {
 }
 
 optimizedJar {
-    mainClassName = 'network.balanced.score.core.Loans'
-    archivesBaseName = 'loans'
+    mainClassName = 'network.balanced.score.core.Foo'
+    archivesBaseName = 'foo'
 }
 
 deployJar {
