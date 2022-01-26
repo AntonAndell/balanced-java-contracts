@@ -28,9 +28,9 @@ public class Loans {
         public BigInteger lockedLoan;
 
         public LoanTaker() {
-            this.collateral = BigInteger.ZERO;
-            this.rebalanceTokens = BigInteger.ZERO;
-            this.lockedLoan = BigInteger.ZERO;
+            collateral = BigInteger.ZERO;
+            rebalanceTokens = BigInteger.ZERO;
+            lockedLoan = BigInteger.ZERO;
         }
     }
 
@@ -49,10 +49,13 @@ public class Loans {
     private final VarDB<Address> bnusd = Context.newVarDB("bnUSD", Address.class);
     private final VarDB<Address> dex = Context.newVarDB("dex", Address.class);
 
-
     private final VarDB<BigInteger> rebalanceCollateral = Context.newVarDB("RCollateral", BigInteger.class);
     private final VarDB<BigInteger> rebalaceLoan = Context.newVarDB("RLoan", BigInteger.class);
     private final VarDB<BigInteger> totalRebalanceShares = Context.newVarDB("TRShares", BigInteger.class);
+
+    private final VarDB<Address> excpectedToken = Context.newVarDB("excpectedToken", Address.class);
+    private final VarDB<BigInteger> amountReceived = Context.newVarDB("amountReceived", BigInteger.class);
+
 
     private final DictDB<Address, LoanTaker> loanTakers = Context.newDictDB("Loan_Takers",LoanTaker.class);
     
@@ -70,33 +73,32 @@ public class Loans {
 
     @External
     public void setSicx(Address address) {
-        
-        this.sicx.set(address);
+        sicx.set(address);
     }
 
     @External(readonly = true)
     public Address getSicx() {
-        return this.sicx.get();
+        return sicx.get();
     }
 
     @External 
     public void setbnUSD(Address address) {
-        this.bnusd.set(address);
+        bnusd.set(address);
     }
 
     @External(readonly = true)
     public Address getbnUSD() {
-        return this.bnusd.get();
+        return bnusd.get();
     }
 
     @External
     public void setDex(Address address) {
-        this.dex.set(address);
+        dex.set(address);
     }
 
     @External(readonly = true)
     public Address getDex() {
-        return this.dex.get();
+        return dex.get();
     }
 
     @External(readonly = true)
@@ -119,20 +121,24 @@ public class Loans {
 
     @External
     public void raisePrice(BigInteger amount) {
-        // Context.require(Context.getCaller() == this.rebalancing.get());
-        // byte[] data = createSwapData(bnusd.get());
-        // transferToken(this.sicx.get(), this.dex.get(), amount, data);
+        excpectedToken.set(bnusd.get());
+        byte[] data = createSwapData(bnusd.get());
+        transferToken(sicx.get(), dex.get(), amount, data);
         rebalanceCollateral.set(rebalanceCollateral.get().subtract(amount));
-        rebalaceLoan.set(rebalaceLoan.get().subtract(amount.multiply(PRICE)));
+        rebalaceLoan.set(rebalaceLoan.get().subtract(amountReceived.get()));
+        amountReceived.set(BigInteger.ZERO);
     }
     
     @External
     public void lowerPrice(BigInteger amount) {
-        // Context.require(Context.getCaller() == this.rebalancing.get());
-        // byte[] data = createSwapData(sicx.get());
-        // transferToken(this.bnusd.get(), this.dex.get(), amount, data);
-        rebalanceCollateral.set(rebalanceCollateral.get().add(amount.divide(PRICE)));
+        Context.call(bnusd.get(), "mintTo", Context.getAddress(), amount);
+
+        excpectedToken.set(sicx.get());
+        byte[] data = createSwapData(sicx.get());
+        transferToken(bnusd.get(), dex.get(), amount, data);
+        rebalanceCollateral.set(rebalanceCollateral.get().add(amountReceived.get()));
         rebalaceLoan.set(rebalaceLoan.get().add(amount));
+        amountReceived.set(BigInteger.ZERO);
     }
 
     @External
@@ -176,11 +182,19 @@ public class Loans {
         user.collateral = user.collateral.add(collateral.subtract(collateralForRebalancing));
         user.rebalanceTokens = user.rebalanceTokens.add(rebalancingTokens);
         loanTakers.set(_from, user);
+        Context.call(bnusd.get(), "mintTo", _from, loanSize);
     }
 
     @External
     public void tokenFallback(Address _from, BigInteger _value, byte[] _data) {
         Address token = Context.getCaller();
+        System.out.println("tokenFallback");
+        System.out.println(token);
+        if (token.equals(excpectedToken.get())) {
+            amountReceived.set(_value);
+            excpectedToken.set(null);
+            return;
+        }
         //Context.require(token.equals(sicx.get()), "Token Fallback: Only BALN deposits are allowed");
 
         Context.require(_value.signum() > 0, "Token Fallback: Token value should be a positive number");
@@ -194,6 +208,8 @@ public class Loans {
 
         switch (method) {
             case "depositAndBorrow":
+                // System.out.println("dep nd borrow");
+                // System.out.println(token);
                 BigInteger amount = BigInteger.valueOf(params.get("amount").asLong()).multiply(BigInteger.TEN.pow(18));
                 depositAndBorrow(_from, _value, amount);
                 break;

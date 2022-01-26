@@ -1,2 +1,3 @@
 rootProject.name = 'balanced-java-contracts'
 include (':core-contracts:loans')
+include (':core-contracts:dex')

@@ -10,15 +10,16 @@ import org.json.JSONObject;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.function.Executable;
 
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import score.Context;
 import score.Address;
+import score.annotation.External;
 
 import java.math.BigInteger;
 import java.math.MathContext;
@@ -26,6 +27,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import network.balanced.score.core.DexMock;
 
 class User {
     public BigInteger collateral;
@@ -123,6 +126,7 @@ class LoansTests extends TestBase {
     private static Score loans;
     private static Score sicx;
     private static Score bnusd;
+    private static Score dex;
 
     // Loans score deployment settings.
     private static final String nameLoans = "Loans";
@@ -148,6 +152,17 @@ class LoansTests extends TestBase {
             mintTo(Context.getCaller(), _totalSupply);
         }
     }
+    public static class IRC2MintAndBurnable extends IRC2Mintable {
+        public IRC2MintAndBurnable(String _name, String _symbol, int _decimals, BigInteger _totalSupply) {
+            super(_name, _symbol, _decimals);
+            mintTo(Context.getCaller(), _totalSupply);
+        }
+
+        @External
+        public void burnFrom(Address address, BigInteger _amount) {
+            _burn(address, _amount);
+        }
+    }
 
     private void setupAccounts() {
         int numberOfAccounts = 10;
@@ -158,9 +173,24 @@ class LoansTests extends TestBase {
         }
     }
 
+    private void setupDex() throws Exception{
+        Account account = sm.createAccount();
+        BigInteger initalsICX = BigInteger.TEN.pow(23);
+        BigInteger initalbnUSD = BigInteger.TEN.pow(23);
+        sicx.invoke(owner, "mintTo", account.getAddress(), initalsICX.add(BigInteger.TEN.pow(18)));
+        bnusd.invoke(owner, "mintTo", account.getAddress(), initalbnUSD.add(BigInteger.TEN.pow(18)));  
+        dex = sm.deploy(owner, DexMock.class, sicx.getAddress(), bnusd.getAddress());
+        sicx.invoke(account, "transfer", dex.getAddress(), initalsICX, new byte[0]);
+        bnusd.invoke(account, "transfer", dex.getAddress(), initalbnUSD, new byte[0]);
+    }
+
     private void takeLoan(Account account, int collateral, int loan) {
         byte[] params = tokenData("depositAndBorrow", Map.of("amount",  loan));
+        System.out.println("loan");
+        System.out.println(sicx.getAddress());
         sicx.invoke(account, "transfer", loans.getAddress(), BigInteger.valueOf(collateral).multiply(BigInteger.TEN.pow(18)), params);
+        System.out.println(sicx.getAddress());
+
         referenceLoan.depositAndBorrow(account.getAddress(),  BigInteger.valueOf(collateral).multiply(BigInteger.TEN.pow(18)), BigInteger.valueOf(loan).multiply(BigInteger.TEN.pow(18)));
     }
 
@@ -194,14 +224,19 @@ class LoansTests extends TestBase {
 
     @BeforeEach
     public void setup() throws Exception {
-        loans = sm.deploy(owner, Loans.class, nameLoans);
         sicx = sm.deploy(owner, IRC2BasicToken.class, nameSicx, symbolSicx, decimalsSicx, initalsupplySicx);
-        bnusd = sm.deploy(owner, IRC2BasicToken.class, nameBnusd, symbolBnusd, decimalsBnusd, initalsupplyBnusd);
+        loans = sm.deploy(owner, Loans.class, nameLoans);
+        bnusd = sm.deploy(owner, IRC2MintAndBurnable.class, nameBnusd, symbolBnusd, decimalsBnusd, initalsupplyBnusd);
+
+       
         setupAccounts();
+        setupDex();
         loans.invoke(owner, "setSicx", sicx.getAddress());
+        loans.invoke(owner, "setbnUSD", bnusd.getAddress());
+        loans.invoke(owner, "setDex", dex.getAddress());
+        bnusd.invoke(owner, "setMinter", loans.getAddress());
         referenceLoan = new ReferenceLoan();
     }
-
 
     // @Test
     // void singleLoan() {
@@ -227,7 +262,7 @@ class LoansTests extends TestBase {
     //     takeLoan(account4, 1000, 200);
     // }
 
-     @Test
+    @Test
     void testLoan2() {
 
         Account account1 = accounts.get(0);
@@ -244,16 +279,16 @@ class LoansTests extends TestBase {
         System.out.println("ratio:" + ratio.get("RebalanceCollateral").divide(ratio.get("Loan")).toString());
         takeLoan(account2, 2000, 400);
         lowerPrice(BigInteger.valueOf(100));
-        //raisePrice(BigInteger.valueOf(120));
+        raisePrice(BigInteger.valueOf(120));
         takeLoan(account3, 1000, 100);
         raisePrice(BigInteger.valueOf(30));
-        takeLoan(account4, 4030, 250);
+        takeLoan(account4, 4020, 250);
         
         takeLoan(account5, 2300, 110);
-        lowerPrice(BigInteger.valueOf(60));
+        //lowerPrice(BigInteger.valueOf(60));
         takeLoan(account6, 400, 40);
-        lowerPrice(BigInteger.valueOf(60));
-        lowerPrice(BigInteger.valueOf(60));
+        //lowerPrice(BigInteger.valueOf(60));
+        //lowerPrice(BigInteger.valueOf(60));
 
         takeLoan(account7, 7000, 1800);
 
