@@ -120,34 +120,42 @@ public class Loans {
     }
 
     @External
-    public void raisePrice(BigInteger amount) {
+    public BigInteger raisePrice(BigInteger amount) {
         excpectedToken.set(bnusd.get());
         byte[] data = createSwapData(bnusd.get());
         transferToken(sicx.get(), dex.get(), amount, data);
+    
         rebalanceCollateral.set(rebalanceCollateral.get().subtract(amount));
         rebalaceLoan.set(rebalaceLoan.get().subtract(amountReceived.get()));
+
+        BigInteger amountRepaid = amountReceived.get();
         amountReceived.set(BigInteger.ZERO);
+
+        return amountRepaid;
     }
     
     @External
-    public void lowerPrice(BigInteger amount) {
+    public BigInteger lowerPrice(BigInteger amount) {
         Context.call(bnusd.get(), "mintTo", Context.getAddress(), amount);
 
         excpectedToken.set(sicx.get());
         byte[] data = createSwapData(sicx.get());
         transferToken(bnusd.get(), dex.get(), amount, data);
+
         rebalanceCollateral.set(rebalanceCollateral.get().add(amountReceived.get()));
         rebalaceLoan.set(rebalaceLoan.get().add(amount));
+
+        BigInteger amountToAdd = amountReceived.get();
         amountReceived.set(BigInteger.ZERO);
+
+        return amountToAdd;
     }
 
     @External
     public void withdraw(BigInteger collateral) {
         LoanTaker user  = loanTakers.get(Context.getCaller());
-        //Context.require(user.collaterar.compareTo(collateral));
-        //TODO: also require governance LTV value
-
         user.collateral = user.collateral.subtract(collateral);
+
         BigInteger collateralInPool = getUserCollateral(user);
         loanTakers.set(Context.getCaller(), user);
     }
@@ -156,9 +164,7 @@ public class Loans {
     public void repayLoan(BigInteger repaidAmount) {
         LoanTaker user  = loanTakers.get(Context.getCaller());
 
-        //ignoring locked loan
         BigInteger loan = getUserLoan(user);
-        //Context.require(loan.compareTo(repaidAmount));
         BigInteger collateral = getUserCollateral(user);
 
         BigInteger removedTokens = repaidAmount.multiply(totalRebalanceShares.get()).divide(rebalaceLoan.get());
@@ -177,8 +183,7 @@ public class Loans {
 
         BigInteger collateralForRebalancing = calculateCollateralForRebalancing(loanSize);
         BigInteger rebalancingTokens = calculateRebalancingTokens(loanSize);
-    
-        //Mint and send to user
+
         user.collateral = user.collateral.add(collateral.subtract(collateralForRebalancing));
         user.rebalanceTokens = user.rebalanceTokens.add(rebalancingTokens);
         loanTakers.set(_from, user);
@@ -188,14 +193,12 @@ public class Loans {
     @External
     public void tokenFallback(Address _from, BigInteger _value, byte[] _data) {
         Address token = Context.getCaller();
-        System.out.println("tokenFallback");
-        System.out.println(token);
+
         if (token.equals(excpectedToken.get())) {
             amountReceived.set(_value);
             excpectedToken.set(null);
             return;
         }
-        //Context.require(token.equals(sicx.get()), "Token Fallback: Only BALN deposits are allowed");
 
         Context.require(_value.signum() > 0, "Token Fallback: Token value should be a positive number");
         String unpackedData = new String(_data);
@@ -208,8 +211,6 @@ public class Loans {
 
         switch (method) {
             case "depositAndBorrow":
-                // System.out.println("dep nd borrow");
-                // System.out.println(token);
                 BigInteger amount = BigInteger.valueOf(params.get("amount").asLong()).multiply(BigInteger.TEN.pow(18));
                 depositAndBorrow(_from, _value, amount);
                 break;

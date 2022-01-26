@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import network.balanced.score.core.DexMock;
+import network.balanced.score.core.token1Mintable;
 
 class User {
     public BigInteger collateral;
@@ -57,55 +58,49 @@ class ReferenceLoan {
         users.put(address, loanTaker);
     }
 
-    public void raisePrice(BigInteger collateralToSell) {
-        BigInteger totalCollateralChange = BigInteger.ZERO;
-        BigInteger totalLoanChange = BigInteger.ZERO;
+    public void raisePrice(BigInteger collateralToSell, BigInteger loanToRepay) {
         for(Map.Entry<Address, User>  entry : users.entrySet()) {
             Address address = entry.getKey();
             User loanTaker = entry.getValue();
-            BigInteger rebalanceShare = loanTaker.loan.multiply(collateralToSell).divide(totalLoan);
+            BigInteger loanShare = loanTaker.loan.multiply(loanToRepay).divide(totalLoan);
+            BigInteger collateralShare = loanTaker.loan.multiply(collateralToSell).divide(totalLoan);
 
-            loanTaker.collateral = loanTaker.collateral.subtract(rebalanceShare);
-            totalCollateralChange = totalCollateralChange.subtract(rebalanceShare);
-
-            loanTaker.loan = loanTaker.loan.subtract(rebalanceShare.multiply(price));
-            totalLoanChange = totalLoanChange.subtract(rebalanceShare.multiply(price));
+            loanTaker.collateral = loanTaker.collateral.subtract(collateralShare);
+            loanTaker.loan = loanTaker.loan.subtract(loanShare);
         }
 
-        totalCollateral = totalCollateral.add(totalCollateralChange);
-        totalLoan = totalLoan.add(totalLoanChange);
-        
+        totalCollateral = totalCollateral.subtract(collateralToSell);
+        totalLoan = totalLoan.subtract(loanToRepay);
     }
 
+
+    public void lowerPrice(BigInteger loanToAdd, BigInteger colalteralToAdd) {
+        for(Map.Entry<Address, User>  entry : users.entrySet()) {
+            Address address = entry.getKey();
+            User loanTaker = entry.getValue();
+            BigInteger loanShare = loanTaker.loan.multiply(loanToAdd).divide(totalLoan);
+            BigInteger collateralShare = loanTaker.loan.multiply(colalteralToAdd).divide(totalLoan);
+
+            loanTaker.collateral = loanTaker.collateral.add(collateralShare);
+            loanTaker.loan = loanTaker.loan.add(loanShare);
+            
+        }
+
+        totalCollateral = totalCollateral.add(colalteralToAdd);
+        totalLoan = totalLoan.add(loanToAdd);
+    }
+
+    
     public void repayLoan(Address address, BigInteger repaidAmount) {
-          User loanTaker = users.get(address);
-          loanTaker.loan = loanTaker.loan.subtract(repaidAmount);
-          totalLoan = totalLoan.subtract(repaidAmount);
+        User loanTaker = users.get(address);
+        loanTaker.loan = loanTaker.loan.subtract(repaidAmount);
+        totalLoan = totalLoan.subtract(repaidAmount);
     }
 
     public void withdraw(Address address, BigInteger collateral) {
-        User loanTaker = users.get(address);
-        loanTaker.collateral = loanTaker.collateral.subtract(collateral);
-        totalCollateral = totalCollateral.subtract(collateral);
-    }
-
-    public void lowerPrice(BigInteger loanToAdd) {
-        BigInteger totalCollateralChange = BigInteger.ZERO;
-        BigInteger totalLoanChange = BigInteger.ZERO;
-        for(Map.Entry<Address, User>  entry : users.entrySet()) {
-            Address address = entry.getKey();
-            User loanTaker = entry.getValue();
-            BigInteger rebalanceShare = loanTaker.loan.multiply(loanToAdd).divide(totalLoan);
-
-            loanTaker.collateral = loanTaker.collateral.add(rebalanceShare.divide(price));
-            totalCollateralChange = totalCollateralChange.add(rebalanceShare.divide(price));
-
-            loanTaker.loan = loanTaker.loan.add(rebalanceShare);
-            totalLoanChange = totalLoanChange.add(rebalanceShare);
-        }
-
-        totalCollateral = totalCollateral.add(totalCollateralChange);
-        totalLoan = totalLoan.add(totalLoanChange);
+      User loanTaker = users.get(address);
+      loanTaker.collateral = loanTaker.collateral.subtract(collateral);
+      totalCollateral = totalCollateral.subtract(collateral);
     }
 
     public Map<String, BigInteger> getPosition(Address address) {
@@ -146,8 +141,8 @@ class LoansTests extends TestBase {
     private static final int decimalsBnusd = 18;
     private static final BigInteger initalsupplyBnusd = BigInteger.TEN.pow(50);
 
-    public static class IRC2BasicToken extends IRC2Mintable {
-        public IRC2BasicToken(String _name, String _symbol, int _decimals, BigInteger _totalSupply) {
+    public static class sICXToken extends token1Mintable {
+        public sICXToken(String _name, String _symbol, int _decimals, BigInteger _totalSupply) {
             super(_name, _symbol, _decimals);
             mintTo(Context.getCaller(), _totalSupply);
         }
@@ -186,22 +181,33 @@ class LoansTests extends TestBase {
 
     private void takeLoan(Account account, int collateral, int loan) {
         byte[] params = tokenData("depositAndBorrow", Map.of("amount",  loan));
-        System.out.println("loan");
-        System.out.println(sicx.getAddress());
         sicx.invoke(account, "transfer", loans.getAddress(), BigInteger.valueOf(collateral).multiply(BigInteger.TEN.pow(18)), params);
-        System.out.println(sicx.getAddress());
-
         referenceLoan.depositAndBorrow(account.getAddress(),  BigInteger.valueOf(collateral).multiply(BigInteger.TEN.pow(18)), BigInteger.valueOf(loan).multiply(BigInteger.TEN.pow(18)));
     }
 
-    private void lowerPrice(BigInteger loanToAdd) { 
-        loans.invoke(owner, "lowerPrice", loanToAdd.multiply(BigInteger.TEN.pow(18)));  
-        referenceLoan.lowerPrice(loanToAdd.multiply(BigInteger.TEN.pow(18)));
+    private void lowerPrice(BigInteger loanToAdd) {
+        loanToAdd = loanToAdd.multiply(BigInteger.TEN.pow(18));
+        Map<String, BigInteger> prePostion = (Map<String, BigInteger>)loans.call("get");
+        loans.invoke(owner, "lowerPrice", loanToAdd);  
+        Map<String, BigInteger> postPosition = (Map<String, BigInteger>)loans.call("get");
+
+        assertEquals(prePostion.get("Loan"), postPosition.get("Loan").subtract(loanToAdd));
+        BigInteger collateralAdded = postPosition.get("RebalanceCollateral").subtract(prePostion.get("RebalanceCollateral"));
+
+        referenceLoan.lowerPrice(loanToAdd, collateralAdded);
     }
 
     private void raisePrice(BigInteger collateralToSell) {
-        loans.invoke(owner, "raisePrice", collateralToSell.multiply(BigInteger.TEN.pow(18)));
-        referenceLoan.raisePrice(collateralToSell.multiply(BigInteger.TEN.pow(18)));
+        collateralToSell = collateralToSell.multiply(BigInteger.TEN.pow(18));
+        Map<String, BigInteger> prePostion = (Map<String, BigInteger>)loans.call("get");
+        loans.invoke(owner, "raisePrice", collateralToSell);
+        Map<String, BigInteger> postPosition = (Map<String, BigInteger>)loans.call("get");
+        
+        assertEquals(prePostion.get("RebalanceCollateral"), postPosition.get("RebalanceCollateral").add(collateralToSell));
+        BigInteger bnusdAdded  = prePostion.get("Loan").subtract(postPosition.get("Loan"));
+
+
+        referenceLoan.raisePrice(collateralToSell, bnusdAdded);
     }
 
     private void repayLoan(Account account, BigInteger repaidAmount) {
@@ -224,11 +230,10 @@ class LoansTests extends TestBase {
 
     @BeforeEach
     public void setup() throws Exception {
-        sicx = sm.deploy(owner, IRC2BasicToken.class, nameSicx, symbolSicx, decimalsSicx, initalsupplySicx);
+        sicx = sm.deploy(owner, sICXToken.class, nameSicx, symbolSicx, decimalsSicx, initalsupplySicx);
         loans = sm.deploy(owner, Loans.class, nameLoans);
         bnusd = sm.deploy(owner, IRC2MintAndBurnable.class, nameBnusd, symbolBnusd, decimalsBnusd, initalsupplyBnusd);
 
-       
         setupAccounts();
         setupDex();
         loans.invoke(owner, "setSicx", sicx.getAddress());
@@ -275,8 +280,6 @@ class LoansTests extends TestBase {
         Account account8 = accounts.get(7);
 
         takeLoan(account1, 1000, 100);
-        Map<String, BigInteger> ratio = (Map<String, BigInteger>)loans.call("get");
-        System.out.println("ratio:" + ratio.get("RebalanceCollateral").divide(ratio.get("Loan")).toString());
         takeLoan(account2, 2000, 400);
         lowerPrice(BigInteger.valueOf(100));
         raisePrice(BigInteger.valueOf(120));
@@ -285,10 +288,10 @@ class LoansTests extends TestBase {
         takeLoan(account4, 4020, 250);
         
         takeLoan(account5, 2300, 110);
-        //lowerPrice(BigInteger.valueOf(60));
+        lowerPrice(BigInteger.valueOf(60));
         takeLoan(account6, 400, 40);
-        //lowerPrice(BigInteger.valueOf(60));
-        //lowerPrice(BigInteger.valueOf(60));
+        lowerPrice(BigInteger.valueOf(60));
+        lowerPrice(BigInteger.valueOf(60));
 
         takeLoan(account7, 7000, 1800);
 
@@ -300,22 +303,27 @@ class LoansTests extends TestBase {
         BigDecimal collateral = new BigDecimal(ratio.get("RebalanceCollateral"));
         BigDecimal loan = new BigDecimal(ratio.get("Loan"));
         System.out.println("ratio:" + collateral.divide(loan, MathContext.DECIMAL128).toString());
-        System.out.println(" Collateral: " + ratio.get("RebalanceCollateral").divide(BigInteger.TEN.pow(18)).toString() + " Loan: " + ratio.get("Loan").divide(BigInteger.TEN.pow(18)).toString());
+        System.out.println(" Collateral: " + ratio.get("RebalanceCollateral").toString() + " Loan: " + ratio.get("Loan").toString());
         System.out.println(referenceLoan.totalLoan.toString());
+        BigInteger LoanTotal = BigInteger.ZERO;
+        BigInteger referenceLoanTotal = BigInteger.ZERO;
         for (Account account : accounts) {
             Map<String, BigInteger> position = (Map<String, BigInteger>)loans.call("getPosition", account.getAddress());
             Map<String, BigInteger> referencePosition = referenceLoan.getPosition(account.getAddress());
+
+            referenceLoanTotal = referenceLoanTotal.add(referencePosition.get("Loan"));
+            LoanTotal = LoanTotal.add(referencePosition.get("Loan"));
+
             if (!position.get("Loan").equals(BigInteger.ZERO)) {
-                if (position.get("Collateral").divide(position.get("Loan")).equals(referencePosition.get("Collateral").divide(referencePosition.get("Loan")))){
-                    System.out.println ("collateral");
-                    System.out.println (position.get("Collateral").toString() + " == " + referencePosition.get("Collateral").toString());
-                    System.out.println ("loans");
-                    System.out.println (position.get("Loan").toString() + " == " + referencePosition.get("Loan").toString());
-                }
+                // if (position.get("Collateral").divide(position.get("Loan")).equals(referencePosition.get("Collateral").divide(referencePosition.get("Loan")))){
+                System.out.println ("collateral");
+                System.out.println (position.get("Collateral").toString() + " == " + referencePosition.get("Collateral").toString());
+                System.out.println ("loans");
+                System.out.println (position.get("Loan").toString() + " == " + referencePosition.get("Loan").toString());
+                // }
             }
-            
-           
         }
-    }
-  
+        System.out.format("LoanTotal: " + LoanTotal.toString() + "\n");
+        System.out.format("referenceLoanTotal: " + referenceLoanTotal.toString() + "\n");
+    }  
 }

@@ -49,12 +49,10 @@ public class DexMock {
             BigInteger rightLiquidity  = (BigInteger) Context.call(rightToken, "balanceOf", Context.getAddress());
             if (token == rightToken) {
                 BigInteger tokensReceived = rightLiquidity.multiply(_value).divide(leftLiquidity.add(_value));
-                Context.call(rightToken, "transfer", _from, tokensReceived, new byte[0]);
+                Context.call(leftToken, "transfer", _from, tokensReceived, new byte[0]);
             } else if (token == leftToken){
                 BigInteger tokensReceived = leftLiquidity.multiply(_value).divide(rightLiquidity.add(_value));
-                System.out.println("sending");
-                System.out.println(leftToken);
-                Context.call(leftToken, "transfer", _from, tokensReceived, new byte[0]);
+                Context.call(rightToken, "transfer", _from, tokensReceived, new byte[0]);
             }
         }
     }
