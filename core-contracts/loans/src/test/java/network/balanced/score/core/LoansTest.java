@@ -29,88 +29,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import network.balanced.score.core.DexMock;
-import network.balanced.score.core.token1Mintable;
+import network.balanced.score.core.sICXMintBurn;
+import network.balanced.score.core.bnUSDMintBurn;
+import network.balanced.score.core.ReferenceLoan;
 
-class User {
-    public BigInteger collateral;
-    public BigInteger loan;
-
-    public User() {
-        this.collateral = BigInteger.ZERO;
-        this.loan = BigInteger.ZERO;
-    }
-}
-
-class ReferenceLoan {
-    public BigInteger totalLoan = BigInteger.ZERO;
-    public BigInteger totalCollateral= BigInteger.ZERO;
-    public BigInteger price = BigInteger.valueOf(2);
-
-    private Map<Address, User> users = new HashMap<>();
-
-    public void depositAndBorrow(Address address, BigInteger collateral, BigInteger loan) {
-        User loanTaker = users.getOrDefault(address, new User());
-        loanTaker.loan = loanTaker.loan.add(loan);
-        loanTaker.collateral = loanTaker.collateral.add(collateral);
-
-        totalCollateral = totalCollateral.add(collateral);
-        totalLoan = totalLoan.add(loan);
-        users.put(address, loanTaker);
-    }
-
-    public void raisePrice(BigInteger collateralToSell, BigInteger loanToRepay) {
-        for(Map.Entry<Address, User>  entry : users.entrySet()) {
-            Address address = entry.getKey();
-            User loanTaker = entry.getValue();
-            BigInteger loanShare = loanTaker.loan.multiply(loanToRepay).divide(totalLoan);
-            BigInteger collateralShare = loanTaker.loan.multiply(collateralToSell).divide(totalLoan);
-
-            loanTaker.collateral = loanTaker.collateral.subtract(collateralShare);
-            loanTaker.loan = loanTaker.loan.subtract(loanShare);
-        }
-
-        totalCollateral = totalCollateral.subtract(collateralToSell);
-        totalLoan = totalLoan.subtract(loanToRepay);
-    }
+import java.util.Random;
 
 
-    public void lowerPrice(BigInteger loanToAdd, BigInteger colalteralToAdd) {
-        for(Map.Entry<Address, User>  entry : users.entrySet()) {
-            Address address = entry.getKey();
-            User loanTaker = entry.getValue();
-            BigInteger loanShare = loanTaker.loan.multiply(loanToAdd).divide(totalLoan);
-            BigInteger collateralShare = loanTaker.loan.multiply(colalteralToAdd).divide(totalLoan);
-
-            loanTaker.collateral = loanTaker.collateral.add(collateralShare);
-            loanTaker.loan = loanTaker.loan.add(loanShare);
-            
-        }
-
-        totalCollateral = totalCollateral.add(colalteralToAdd);
-        totalLoan = totalLoan.add(loanToAdd);
-    }
-
-    
-    public void repayLoan(Address address, BigInteger repaidAmount) {
-        User loanTaker = users.get(address);
-        loanTaker.loan = loanTaker.loan.subtract(repaidAmount);
-        totalLoan = totalLoan.subtract(repaidAmount);
-    }
-
-    public void withdraw(Address address, BigInteger collateral) {
-      User loanTaker = users.get(address);
-      loanTaker.collateral = loanTaker.collateral.subtract(collateral);
-      totalCollateral = totalCollateral.subtract(collateral);
-    }
-
-    public Map<String, BigInteger> getPosition(Address address) {
-        User loanTaker = users.getOrDefault(address, new User());
-        return Map.of(
-                "Loan", loanTaker.loan,
-                "Collateral", loanTaker.collateral
-            );
-    }
-}
 
 @DisplayName("Loans Tests")
 class LoansTests extends TestBase {
@@ -124,7 +49,6 @@ class LoansTests extends TestBase {
     private static Score dex;
 
     // Loans score deployment settings.
-    private static final String nameLoans = "Loans";
     private final ArrayList<Account> accounts = new ArrayList<>();
     private static final BigInteger MINT_AMOUNT = BigInteger.TEN.pow(40);
     private ReferenceLoan referenceLoan;
@@ -141,24 +65,6 @@ class LoansTests extends TestBase {
     private static final int decimalsBnusd = 18;
     private static final BigInteger initalsupplyBnusd = BigInteger.TEN.pow(50);
 
-    public static class sICXToken extends token1Mintable {
-        public sICXToken(String _name, String _symbol, int _decimals, BigInteger _totalSupply) {
-            super(_name, _symbol, _decimals);
-            mintTo(Context.getCaller(), _totalSupply);
-        }
-    }
-    public static class IRC2MintAndBurnable extends IRC2Mintable {
-        public IRC2MintAndBurnable(String _name, String _symbol, int _decimals, BigInteger _totalSupply) {
-            super(_name, _symbol, _decimals);
-            mintTo(Context.getCaller(), _totalSupply);
-        }
-
-        @External
-        public void burnFrom(Address address, BigInteger _amount) {
-            _burn(address, _amount);
-        }
-    }
-
     private void setupAccounts() {
         int numberOfAccounts = 10;
         for (int accountNumber = 0; accountNumber < numberOfAccounts; accountNumber++) {
@@ -170,10 +76,10 @@ class LoansTests extends TestBase {
 
     private void setupDex() throws Exception{
         Account account = sm.createAccount();
-        BigInteger initalsICX = BigInteger.TEN.pow(23);
-        BigInteger initalbnUSD = BigInteger.TEN.pow(23);
-        sicx.invoke(owner, "mintTo", account.getAddress(), initalsICX.add(BigInteger.TEN.pow(18)));
-        bnusd.invoke(owner, "mintTo", account.getAddress(), initalbnUSD.add(BigInteger.TEN.pow(18)));  
+        BigInteger initalsICX = BigInteger.TEN.pow(24);
+        BigInteger initalbnUSD = BigInteger.TEN.pow(24).multiply(BigInteger.valueOf(2));
+        sicx.invoke(owner, "mintTo", account.getAddress(), initalsICX);
+        bnusd.invoke(owner, "mintTo", account.getAddress(), initalbnUSD);  
         dex = sm.deploy(owner, DexMock.class, sicx.getAddress(), bnusd.getAddress());
         sicx.invoke(account, "transfer", dex.getAddress(), initalsICX, new byte[0]);
         bnusd.invoke(account, "transfer", dex.getAddress(), initalbnUSD, new byte[0]);
@@ -230,9 +136,9 @@ class LoansTests extends TestBase {
 
     @BeforeEach
     public void setup() throws Exception {
-        sicx = sm.deploy(owner, sICXToken.class, nameSicx, symbolSicx, decimalsSicx, initalsupplySicx);
-        loans = sm.deploy(owner, Loans.class, nameLoans);
-        bnusd = sm.deploy(owner, IRC2MintAndBurnable.class, nameBnusd, symbolBnusd, decimalsBnusd, initalsupplyBnusd);
+        sicx = sm.deploy(owner, sICXMintBurn.class, nameSicx, symbolSicx, decimalsSicx, initalsupplySicx);
+        loans = sm.deploy(owner, Loans.class);
+        bnusd = sm.deploy(owner, bnUSDMintBurn.class, nameBnusd, symbolBnusd, decimalsBnusd, initalsupplyBnusd);
 
         setupAccounts();
         setupDex();
@@ -278,6 +184,8 @@ class LoansTests extends TestBase {
         Account account6 = accounts.get(5);
         Account account7 = accounts.get(6);
         Account account8 = accounts.get(7);
+        Account account9 = accounts.get(8);
+        Account account10 = accounts.get(9);
 
         takeLoan(account1, 1000, 100);
         takeLoan(account2, 2000, 400);
@@ -289,12 +197,29 @@ class LoansTests extends TestBase {
         
         takeLoan(account5, 2300, 110);
         lowerPrice(BigInteger.valueOf(60));
-        takeLoan(account6, 400, 40);
-        lowerPrice(BigInteger.valueOf(60));
-        lowerPrice(BigInteger.valueOf(60));
+        takeLoan(account6, 4000, 400);
+        raisePrice(BigInteger.valueOf(60));
+        raisePrice(BigInteger.valueOf(60));
+        raisePrice(BigInteger.valueOf(60));
+        raisePrice(BigInteger.valueOf(60));
 
         takeLoan(account7, 7000, 1800);
+        takeLoan(account8, 6000, 200);
+        takeLoan(account9, 4500, 800);
+        takeLoan(account10, 10000, 2000);
 
+        Random rand = new Random();
+        for (int i = 0; i < 10; i++) {
+            if(rand.nextInt(2) == 1) {
+                lowerPrice(BigInteger.valueOf(rand.nextInt(50)+1));
+            } else {
+                raisePrice(BigInteger.valueOf(rand.nextInt(100)+1));
+            }
+        }
+
+
+        
+        loans.invoke(owner, "rebalanceRebalancePool", BigInteger.TEN.pow(5));
     }
 
     @AfterEach
@@ -303,7 +228,7 @@ class LoansTests extends TestBase {
         BigDecimal collateral = new BigDecimal(ratio.get("RebalanceCollateral"));
         BigDecimal loan = new BigDecimal(ratio.get("Loan"));
         System.out.println("ratio:" + collateral.divide(loan, MathContext.DECIMAL128).toString());
-        System.out.println(" Collateral: " + ratio.get("RebalanceCollateral").toString() + " Loan: " + ratio.get("Loan").toString());
+
         System.out.println(referenceLoan.totalLoan.toString());
         BigInteger LoanTotal = BigInteger.ZERO;
         BigInteger referenceLoanTotal = BigInteger.ZERO;
@@ -312,7 +237,7 @@ class LoansTests extends TestBase {
             Map<String, BigInteger> referencePosition = referenceLoan.getPosition(account.getAddress());
 
             referenceLoanTotal = referenceLoanTotal.add(referencePosition.get("Loan"));
-            LoanTotal = LoanTotal.add(referencePosition.get("Loan"));
+            LoanTotal = LoanTotal.add(position.get("Loan"));
 
             if (!position.get("Loan").equals(BigInteger.ZERO)) {
                 // if (position.get("Collateral").divide(position.get("Loan")).equals(referencePosition.get("Collateral").divide(referencePosition.get("Loan")))){
@@ -323,7 +248,19 @@ class LoansTests extends TestBase {
                 // }
             }
         }
+        System.out.println(" Collateral: " + ratio.get("RebalanceCollateral").toString() + " Loan: " + ratio.get("Loan").toString());
         System.out.format("LoanTotal: " + LoanTotal.toString() + "\n");
         System.out.format("referenceLoanTotal: " + referenceLoanTotal.toString() + "\n");
     }  
+
+    @AfterEach
+    void verifyBnusdTotal() {
+        BigInteger total = BigInteger.ZERO;
+        for (Account account : accounts) {
+            total = total.add((BigInteger)bnusd.call("balanceOf", account.getAddress()));
+        }
+        total = total.add((BigInteger)bnusd.call("balanceOf", owner.getAddress()));
+        total = total.add((BigInteger)bnusd.call("balanceOf", dex.getAddress()));
+        assertEquals(total, bnusd.call("totalSupply"));
+    }
 }

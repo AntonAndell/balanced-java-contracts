@@ -10,45 +10,28 @@ import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 
 import java.math.BigInteger;
-
 import java.util.Map;
 
 import score.ByteArrayObjectWriter;
 import score.Context;
 import score.ObjectReader;
 
-import java.math.BigInteger;
+import network.balanced.score.core.LoansBase;
+import static network.balanced.score.core.Checks.*;
 
+class LoanTaker {
+    public BigInteger collateral;
+    public BigInteger rebalanceTokens;
+    public BigInteger lockedLoan;
 
-public class Loans {
-
-    class LoanTaker {
-        public BigInteger collateral;
-        public BigInteger rebalanceTokens;
-        public BigInteger lockedLoan;
-
-        public LoanTaker() {
-            collateral = BigInteger.ZERO;
-            rebalanceTokens = BigInteger.ZERO;
-            lockedLoan = BigInteger.ZERO;
-        }
+    public LoanTaker() {
+        collateral = BigInteger.ZERO;
+        rebalanceTokens = BigInteger.ZERO;
+        lockedLoan = BigInteger.ZERO;
     }
+}
 
-    // Contract name.
-    private final String name;
-    
-    private static final BigInteger POINTS = BigInteger.TEN.pow(18);
-
-    //Mock variables
-    private static final BigInteger PRICE = BigInteger.valueOf(2);
-    private static final BigInteger LTV = BigInteger.valueOf(35).pow(17);
-    private static final BigInteger BASE_LTV = BigInteger.valueOf(5).pow(17);
-
-    // Balanced contract addresses.
-    private final VarDB<Address> sicx = Context.newVarDB("sICX", Address.class);
-    private final VarDB<Address> bnusd = Context.newVarDB("bnUSD", Address.class);
-    private final VarDB<Address> dex = Context.newVarDB("dex", Address.class);
-
+public class Loans extends LoansBase {
     private final VarDB<BigInteger> rebalanceCollateral = Context.newVarDB("RCollateral", BigInteger.class);
     private final VarDB<BigInteger> rebalaceLoan = Context.newVarDB("RLoan", BigInteger.class);
     private final VarDB<BigInteger> totalRebalanceShares = Context.newVarDB("TRShares", BigInteger.class);
@@ -56,49 +39,12 @@ public class Loans {
     private final VarDB<Address> excpectedToken = Context.newVarDB("excpectedToken", Address.class);
     private final VarDB<BigInteger> amountReceived = Context.newVarDB("amountReceived", BigInteger.class);
 
-
     private final DictDB<Address, LoanTaker> loanTakers = Context.newDictDB("Loan_Takers",LoanTaker.class);
     
-    public Loans(String name) {
-        this.name = name;
+    public Loans() {
         rebalanceCollateral.set(BigInteger.ZERO);
         rebalaceLoan.set(BigInteger.ZERO);
         totalRebalanceShares.set(BigInteger.ZERO);
-    }
-
-    @External(readonly = true)
-    public String name() {
-        return name;
-    }
-
-    @External
-    public void setSicx(Address address) {
-        sicx.set(address);
-    }
-
-    @External(readonly = true)
-    public Address getSicx() {
-        return sicx.get();
-    }
-
-    @External 
-    public void setbnUSD(Address address) {
-        bnusd.set(address);
-    }
-
-    @External(readonly = true)
-    public Address getbnUSD() {
-        return bnusd.get();
-    }
-
-    @External
-    public void setDex(Address address) {
-        dex.set(address);
-    }
-
-    @External(readonly = true)
-    public Address getDex() {
-        return dex.get();
     }
 
     @External(readonly = true)
@@ -129,8 +75,9 @@ public class Loans {
         rebalaceLoan.set(rebalaceLoan.get().subtract(amountReceived.get()));
 
         BigInteger amountRepaid = amountReceived.get();
-        amountReceived.set(BigInteger.ZERO);
 
+        amountReceived.set(BigInteger.ZERO);
+        Context.call(bnusd.get(), "burnFrom", Context.getAddress(), amountRepaid);
         return amountRepaid;
     }
     
@@ -151,32 +98,32 @@ public class Loans {
         return amountToAdd;
     }
 
-    @External
-    public void withdraw(BigInteger collateral) {
-        LoanTaker user  = loanTakers.get(Context.getCaller());
-        user.collateral = user.collateral.subtract(collateral);
+    // @External
+    // public void withdraw(BigInteger collateral) {
+    //     LoanTaker user  = loanTakers.get(Context.getCaller());
+    //     user.collateral = user.collateral.subtract(collateral);
 
-        BigInteger collateralInPool = getUserCollateral(user);
-        loanTakers.set(Context.getCaller(), user);
-    }
+    //     BigInteger collateralInPool = getUserCollateral(user);
+    //     loanTakers.set(Context.getCaller(), user);
+    // }
 
-    @External
-    public void repayLoan(BigInteger repaidAmount) {
-        LoanTaker user  = loanTakers.get(Context.getCaller());
+    // @External
+    // public void repayLoan(BigInteger repaidAmount) {
+    //     LoanTaker user  = loanTakers.get(Context.getCaller());
 
-        BigInteger loan = getUserLoan(user);
-        BigInteger collateral = getUserCollateral(user);
+    //     BigInteger loan = getUserLoan(user);
+    //     BigInteger collateral = getUserCollateral(user);
 
-        BigInteger removedTokens = repaidAmount.multiply(totalRebalanceShares.get()).divide(rebalaceLoan.get());
-        BigInteger removedpoolCollateral =  removedTokens.multiply(rebalanceCollateral.get()).divide(totalRebalanceShares.get());
-        user.collateral = user.collateral.add(removedpoolCollateral);
-        user.rebalanceTokens = user.rebalanceTokens.subtract(removedTokens);
+    //     BigInteger removedTokens = repaidAmount.multiply(totalRebalanceShares.get()).divide(rebalaceLoan.get());
+    //     BigInteger removedpoolCollateral =  removedTokens.multiply(rebalanceCollateral.get()).divide(totalRebalanceShares.get());
+    //     user.collateral = user.collateral.add(removedpoolCollateral);
+    //     user.rebalanceTokens = user.rebalanceTokens.subtract(removedTokens);
 
-        rebalanceCollateral.set(rebalanceCollateral.get().subtract(removedpoolCollateral));
-        totalRebalanceShares.set(totalRebalanceShares.get().subtract(removedTokens));
-        rebalaceLoan.set(rebalaceLoan.get().subtract(repaidAmount));
-        loanTakers.set(Context.getCaller(), user);
-    }
+    //     rebalanceCollateral.set(rebalanceCollateral.get().subtract(removedpoolCollateral));
+    //     totalRebalanceShares.set(totalRebalanceShares.get().subtract(removedTokens));
+    //     rebalaceLoan.set(rebalaceLoan.get().subtract(repaidAmount));
+    //     loanTakers.set(Context.getCaller(), user);
+    // }
 
     private void depositAndBorrow(Address _from, BigInteger collateral, BigInteger loanSize) {
         LoanTaker user  = loanTakers.getOrDefault(_from, new LoanTaker());
@@ -189,10 +136,18 @@ public class Loans {
         loanTakers.set(_from, user);
         Context.call(bnusd.get(), "mintTo", _from, loanSize);
     }
+    
+    @External
+    public void rebalanceRebalancePool(BigInteger ratio) {
+        BigInteger currentRatio = rebalanceCollateral.get().multiply(POINTS).divide(rebalaceLoan.get());
+        BigInteger collateralToChange = rebalanceCollateral.get().subtract(ratio.multiply(rebalaceLoan.get()).divide(POINTS));
+        System.out.format("Current ratio:" + currentRatio.toString() +"\nThe change in collateral needed for ratio: " + ratio.toString() + " collateral: " + collateralToChange.divide(BigInteger.TEN.pow(18)).toString() + "\n");
+    }
 
     @External
     public void tokenFallback(Address _from, BigInteger _value, byte[] _data) {
         Address token = Context.getCaller();
+        Context.require(_value.signum() > 0, "Token Fallback: Token value should be a positive number");
 
         if (token.equals(excpectedToken.get())) {
             amountReceived.set(_value);
@@ -200,7 +155,6 @@ public class Loans {
             return;
         }
 
-        Context.require(_value.signum() > 0, "Token Fallback: Token value should be a positive number");
         String unpackedData = new String(_data);
         Context.require(!unpackedData.equals(""), "Token Fallback: Data can't be empty");
 
@@ -224,8 +178,6 @@ public class Loans {
         BigInteger rebalanceTokens = loanSize;
         if (!totalRebalanceShares.get().equals(BigInteger.ZERO)) {
             rebalanceTokens = totalRebalanceShares.get().multiply(loanSize).divide(rebalaceLoan.get());
-        } else {
-            rebalanceTokens = BigInteger.TEN.pow(36);
         }
 
         totalRebalanceShares.set(totalRebalanceShares.get().add(rebalanceTokens));
@@ -235,7 +187,7 @@ public class Loans {
     }
 
     private BigInteger calculateCollateralForRebalancing(BigInteger loanSize) {
-        BigInteger collateralForRebalancing = loanSize;
+        BigInteger collateralForRebalancing = loanSize.divide(BigInteger.valueOf(2));
         if (!rebalanceCollateral.get().equals(BigInteger.ZERO)) {
             collateralForRebalancing = loanSize.multiply(rebalanceCollateral.get()).divide(rebalaceLoan.get());
         }

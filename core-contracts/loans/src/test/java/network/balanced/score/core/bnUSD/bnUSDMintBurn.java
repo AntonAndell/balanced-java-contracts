@@ -21,18 +21,20 @@ import score.VarDB;
 import score.annotation.External;
 
 import java.math.BigInteger;
-import network.balanced.score.core.token1Basic;
+import network.balanced.score.core.bnUSD;
 
-public abstract class token1Mintable extends token1Basic {
+public class bnUSDMintBurn extends bnUSD {
 
     private final VarDB<Address> minter = Context.newVarDB("minter", Address.class);
 
-    public token1Mintable(String _name, String _symbol, int _decimals) {
+    public bnUSDMintBurn(String _name, String _symbol, int _decimals, BigInteger _totalSupply) {
         super(_name, _symbol, _decimals);
         // By default, set the minter role to the owner
         if (minter.get() == null) {
             minter.set(Context.getOwner());
         }
+
+        mintTo(Context.getCaller(), _totalSupply);
     }
 
     /**
@@ -62,5 +64,10 @@ public abstract class token1Mintable extends token1Basic {
         // simple access control - only the contract owner can set new minter
         Context.require(Context.getCaller().equals(Context.getOwner()));
         minter.set(_minter);
+    }
+
+    @External
+    public void burnFrom(Address address, BigInteger _amount) {
+        _burn(address, _amount);
     }
 }

@@ -47,14 +47,19 @@ public class DexMock {
         if (method.equals("_swap")) {
             BigInteger leftLiquidity = (BigInteger) Context.call(leftToken, "balanceOf", Context.getAddress());
             BigInteger rightLiquidity  = (BigInteger) Context.call(rightToken, "balanceOf", Context.getAddress());
+            System.out.format("\nRightL: " + rightLiquidity.divide(BigInteger.TEN.pow(18)).toString());
+            System.out.format("\nLEFTL: " + leftLiquidity.divide(BigInteger.TEN.pow(18)).toString());
             if (token == rightToken) {
-                BigInteger tokensReceived = rightLiquidity.multiply(_value).divide(leftLiquidity.add(_value));
+                BigInteger tokensReceived = leftLiquidity.multiply(_value).divide(rightLiquidity.add(_value));
+                System.out.format("\nsend left: " + tokensReceived.divide(BigInteger.TEN.pow(18)).toString());
                 Context.call(leftToken, "transfer", _from, tokensReceived, new byte[0]);
             } else if (token == leftToken){
-                BigInteger tokensReceived = leftLiquidity.multiply(_value).divide(rightLiquidity.add(_value));
+                BigInteger tokensReceived = rightLiquidity.multiply(_value).divide(leftLiquidity.add(_value));
+                System.out.format("\nsend right: " + tokensReceived.divide(BigInteger.TEN.pow(18)).toString());
                 Context.call(rightToken, "transfer", _from, tokensReceived, new byte[0]);
             }
         }
+        
     }
 
 }

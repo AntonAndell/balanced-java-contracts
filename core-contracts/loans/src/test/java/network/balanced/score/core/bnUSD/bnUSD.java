@@ -25,9 +25,7 @@ import score.annotation.External;
 import score.annotation.Optional;
 
 import java.math.BigInteger;
-import network.balanced.score.core.token1;
-
-public abstract class token1Basic implements token1 {
+public abstract class bnUSD {
     protected static final Address ZERO_ADDRESS = new Address(new byte[Address.LENGTH]);
     private final VarDB<String> name = Context.newVarDB("token_name", String.class);
     private final VarDB<String> symbol = Context.newVarDB("token_symbol", String.class);
@@ -35,7 +33,7 @@ public abstract class token1Basic implements token1 {
     private final VarDB<BigInteger> totalSupply = Context.newVarDB("total_supply", BigInteger.class);
     private final DictDB<Address, BigInteger> balances = Context.newDictDB("balances", BigInteger.class);
 
-    public token1Basic(String _name, String _symbol, int _decimals) {
+    public bnUSD(String _name, String _symbol, int _decimals) {
         // initialize values only at first deployment
         if (this.name.get() == null) {
             this.name.set(ensureNotEmpty(_name));
