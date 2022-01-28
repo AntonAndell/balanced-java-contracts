@@ -152,12 +152,38 @@ public class LoansBase {
         );
     }
 
-
     @External
     public ArrayList<String> checkDeadMarkets() {
         return markets.getDeadMarkets();
     }
-    
+
+    @External
+    public int getNonzeroPositionCount() {
+        return 0;
+    }
+
+    // @External
+    // public ArrayList<String> getPositionStanding(Address address) {
+    //     return markets.getDeadMarkets();
+    // }
+
+    // @External
+    // public Address getPositionAddress() {
+    //     return markets.getDeadMarkets();
+    // }
+
+    public Map<String, Address> getAssetTokens() {
+        return markets.getAssets();
+    }
+
+    public Map<String, Address> getCollateralTokens() {
+        return markets.getCollateralTypes();
+    }
+
+    public BigInteger getTotalCollateral() {
+        return markets.getTotalActiveCollateral();
+    }
+
     @External
     public void setAdmin(Address address) {
         onlyGovernance();

@@ -7,37 +7,42 @@ import score.Address;
 import java.math.BigInteger;
 
 public class Asset {
-    public final VarDB<Address> assetAddress = Context.newVarDB("assetAddress", Address.class);
+    public final Address assetAddress;
+    public Boolean active = false;
 
     public Asset(Address address) {
-        assetAddress.set(address);
+        assetAddress = address;
     }
 
     public String symbol() {
-        return (String) Context.call(assetAddress.get(), "symbol");
+        return (String) Context.call(assetAddress, "symbol");
     }
 
     public BigInteger totalSupply() {
-        return (BigInteger) Context.call(assetAddress.get(), "totalSupply");
+        return (BigInteger) Context.call(assetAddress, "totalSupply");
     }
 
-    public BigInteger balanceOf() {
-        return (BigInteger) Context.call(assetAddress.get(), "balanceOf");
-    }
+    public BigInteger balanceOf(Address address) {
+        return (BigInteger) Context.call(assetAddress, "balanceOf", address);
+    } 
 
     public String getPeg() {
-        return (String) Context.call(assetAddress.get(), "getPeg");
+        return (String) Context.call(assetAddress, "getPeg");
     }
 
     public BigInteger priceInLoop() {
-        return (BigInteger) Context.call(assetAddress.get(), "priceInLoop");
+        return (BigInteger) Context.call(assetAddress, "priceInLoop");
     }
 
     public BigInteger lastPriceInLoop() {
-        return (BigInteger) Context.call(assetAddress.get(), "lastPriceInLoop");
+        return (BigInteger) Context.call(assetAddress, "lastPriceInLoop");
     }
 
     public Address getAddress() {
-        return (Address) assetAddress.get();
+        return (Address) assetAddress;
+    }
+
+    public Boolean isActive() {
+        return active;
     }
 }

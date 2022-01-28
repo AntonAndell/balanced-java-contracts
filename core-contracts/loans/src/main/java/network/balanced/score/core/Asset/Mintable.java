@@ -9,29 +9,23 @@ import java.math.BigInteger;
 import network.balanced.score.core.Asset;
 
 public class Mintable extends Asset {
-    private VarDB<BigInteger> burnedTokens =  Context.newVarDB("burnedTokens", BigInteger.class);
-    private VarDB<Boolean> active = Context.newVarDB("active", Boolean.class);
+    public BigInteger burnedTokens = BigInteger.ZERO;
 
     public Mintable(Address address) {
         super(address);
     }
 
     public void mint(Address to, BigInteger amount) {
-        Context.call(assetAddress.get(), "mintTo", to, amount);
+        Context.call(assetAddress, "mintTo", to, amount);
     }
 
     public void burn(BigInteger amount) {
-        Context.call(assetAddress.get(), "burn", amount);
-        burnedTokens.set(burnedTokens.get().add(amount));
+        Context.call(assetAddress, "burn", amount);
+        burnedTokens = burnedTokens.add(amount);
     }
 
     public void burnFrom(Address from, BigInteger amount) {
-        Context.call(assetAddress.get(), "burnFrom", from, amount);
-        burnedTokens.set(burnedTokens.get().add(amount));
+        Context.call(assetAddress, "burnFrom", from, amount);
+        burnedTokens = burnedTokens.add(amount);
     }
-
-    public Boolean isActive() {
-        return active.get();
-    }
-
 }
