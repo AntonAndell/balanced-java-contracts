@@ -42,6 +42,7 @@ public class Loans extends LoansBase {
     private final DictDB<Address, LoanTaker> loanTakers = Context.newDictDB("Loan_Takers",LoanTaker.class);
     
     public Loans() {
+        super(Context.getAddress());
         rebalanceCollateral.set(BigInteger.ZERO);
         rebalaceLoan.set(BigInteger.ZERO);
         totalRebalanceShares.set(BigInteger.ZERO);
@@ -130,18 +131,11 @@ public class Loans extends LoansBase {
 
         BigInteger collateralForRebalancing = calculateCollateralForRebalancing(loanSize);
         BigInteger rebalancingTokens = calculateRebalancingTokens(loanSize);
-
+        System.out.format("User collateral: " + collateral.subtract(collateralForRebalancing).toString() + "\n");
         user.collateral = user.collateral.add(collateral.subtract(collateralForRebalancing));
         user.rebalanceTokens = user.rebalanceTokens.add(rebalancingTokens);
         loanTakers.set(_from, user);
         Context.call(bnusd.get(), "mintTo", _from, loanSize);
-    }
-    
-    @External
-    public void rebalanceRebalancePool(BigInteger ratio) {
-        BigInteger currentRatio = rebalanceCollateral.get().multiply(POINTS).divide(rebalaceLoan.get());
-        BigInteger collateralToChange = rebalanceCollateral.get().subtract(ratio.multiply(rebalaceLoan.get()).divide(POINTS));
-        System.out.format("Current ratio:" + currentRatio.toString() +"\nThe change in collateral needed for ratio: " + ratio.toString() + " collateral: " + collateralToChange.divide(BigInteger.TEN.pow(18)).toString() + "\n");
     }
 
     @External
@@ -187,7 +181,7 @@ public class Loans extends LoansBase {
     }
 
     private BigInteger calculateCollateralForRebalancing(BigInteger loanSize) {
-        BigInteger collateralForRebalancing = loanSize.divide(BigInteger.valueOf(2));
+        BigInteger collateralForRebalancing = loanSize.multiply(BigInteger.TEN);
         if (!rebalanceCollateral.get().equals(BigInteger.ZERO)) {
             collateralForRebalancing = loanSize.multiply(rebalanceCollateral.get()).divide(rebalaceLoan.get());
         }

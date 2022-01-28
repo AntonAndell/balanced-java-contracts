@@ -216,10 +216,6 @@ class LoansTests extends TestBase {
                 raisePrice(BigInteger.valueOf(rand.nextInt(100)+1));
             }
         }
-
-
-        
-        loans.invoke(owner, "rebalanceRebalancePool", BigInteger.TEN.pow(5));
     }
 
     @AfterEach
@@ -259,8 +255,11 @@ class LoansTests extends TestBase {
         for (Account account : accounts) {
             total = total.add((BigInteger)bnusd.call("balanceOf", account.getAddress()));
         }
+
+        System.out.format("BnUSD total: " +total.toString() + "\n");
         total = total.add((BigInteger)bnusd.call("balanceOf", owner.getAddress()));
         total = total.add((BigInteger)bnusd.call("balanceOf", dex.getAddress()));
         assertEquals(total, bnusd.call("totalSupply"));
+        System.out.format("BnUSD total: " +total.toString() + "\n");
     }
 }
