@@ -50,8 +50,8 @@ public class ReserveFundTest extends TestBase {
     private Score loansScore;
     private Score sicxScore;
 
-    public static class SicxToken extends IRC2Mintable {
-        public SicxToken(String _name, String _symbol, int _decimals) {
+    public static class sICX extends IRC2Mintable {
+        public sICX(String _name, String _symbol, int _decimals) {
             super(_name, _symbol, _decimals);
         }
     }
@@ -60,7 +60,7 @@ public class ReserveFundTest extends TestBase {
     public void setup() throws Exception {
         reserveScore = sm.deploy(owner, ReserveFund.class, governanceScore.getAddress());
         assert (reserveScore.getAddress().isContract());
-        sicxScore = sm.deploy(owner, SicxToken.class, "Sicx Token", "sICX", 18);
+        sicxScore = sm.deploy(owner, sICX.class, "Sicx Token", "sICX", 18);
         sicxScore.invoke(owner, "mintTo", owner.getAddress(), MINT_AMOUNT);
         loansScore = sm.deploy(owner, Loans.class, reserveScore.getAddress());
     }

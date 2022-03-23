@@ -48,7 +48,7 @@ public class ReserveFund {
     public static final VarDB<Address> admin = Context.newVarDB(ADMIN, Address.class);
     private final VarDB<Address> loansScore = Context.newVarDB(LOANS_SCORE, Address.class);
     private final VarDB<Address> balnToken = Context.newVarDB(BALN_TOKEN, Address.class);
-    private final VarDB<Address> sicxToken = Context.newVarDB(SICX_TOKEN, Address.class);
+    private final VarDB<Address> sICX = Context.newVarDB(SICX_TOKEN, Address.class);
     private final VarDB<BigInteger> baln = Context.newVarDB(BALN, BigInteger.class);
     public static final VarDB<BigInteger> sicx = Context.newVarDB(SICX, BigInteger.class);
     private final BranchDB<Address, DictDB<Address, BigInteger>> awards = Context.newBranchDB(AWARDS, BigInteger.class);
@@ -129,12 +129,12 @@ public class ReserveFund {
         onlyAdmin();
         Context.require(_address.isContract(), TAG + ": Address provided is an EOA address. A contract address is " +
                 "required.");
-        sicxToken.set(_address);
+        sICX.set(_address);
     }
 
     @External(readonly = true)
     public Address getSicx() {
-        return sicxToken.get();
+        return sICX.get();
     }
 
     @External(readonly = true)
@@ -158,11 +158,11 @@ public class ReserveFund {
         Address tokenContract = Context.getCaller();
         if (tokenContract.equals(balnToken.get())) {
             baln.set(baln.getOrDefault(BigInteger.ZERO).add(_value));
-        } else if (tokenContract.equals(sicxToken.get())) {
+        } else if (tokenContract.equals(sICX.get())) {
             sicx.set(sicx.getOrDefault(BigInteger.ZERO).add(_value));
         } else {
             Context.revert(TAG + ": The Reserve Fund can only accept BALN or sICX tokens. Deposit not accepted from " +
-                    tokenContract + " Only accepted from BALN = " + balnToken.get() + " Or sICX = " + sicxToken.get());
+                    tokenContract + " Only accepted from BALN = " + balnToken.get() + " Or sICX = " + sICX.get());
         }
     }
 
@@ -176,7 +176,7 @@ public class ReserveFund {
         BigInteger sicxAmount = sicx.getOrDefault(BigInteger.ZERO);
         BigInteger sicxToSend;
         Address balnTokenAddress = balnToken.get();
-        Address sicxTokenAddress = sicxToken.get();
+        Address sICXAddress = sICX.get();
 
         if (_amount.compareTo(sicxAmount) <= 0) {
             sicxToSend = _amount;
@@ -192,7 +192,7 @@ public class ReserveFund {
         BigInteger newSicxBalance = sicxAmount.subtract(sicxToSend);
         Context.require(newSicxBalance.signum() >= 0, TAG + ": sICX balance can't be set negative");
         sicx.set(newSicxBalance);
-        sendToken(sicxTokenAddress, loansScoreAddress, sicxToSend, "To Loans: ");
+        sendToken(sICXAddress, loansScoreAddress, sicxToSend, "To Loans: ");
         return sicxToSend;
     }
 
@@ -200,7 +200,7 @@ public class ReserveFund {
     public boolean disburse(Address _recipient, Disbursement[] _amounts) {
         onlyGovernance();
         for (Disbursement asset : _amounts) {
-            if (asset.address.equals(sicxToken.get())) {
+            if (asset.address.equals(sICX.get())) {
                 BigInteger sicxAmount = sicx.getOrDefault(BigInteger.ZERO);
                 BigInteger amountToBeClaimedByRecipient = awards.at(_recipient).getOrDefault(asset.address,
                         BigInteger.ZERO);
@@ -232,7 +232,7 @@ public class ReserveFund {
 
         Map<String, Address> assets = new HashMap<>();
         assets.put("BALN", balnToken.get());
-        assets.put("sICX", sicxToken.get());
+        assets.put("sICX", sICX.get());
         for (String symbol : assets.keySet()) {
             Address tokenAddress = assets.get(symbol);
             BigInteger amountToClaim = disbursement.getOrDefault(tokenAddress, BigInteger.ZERO);
